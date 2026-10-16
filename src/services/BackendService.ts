@@ -46,6 +46,14 @@ export interface AnnouncementHistoryItem {
   status: 'sent' | 'failed' | 'simulated';
 }
 
+export interface DeleteCasesResult {
+  succeeded: number;
+  failedCases: CaseReport[];
+  errors: string[];
+}
+
+const APPWRITE_PHOTOS_BUCKET_ID = '6a4cc11b00140e0bddad';
+
 export function getCaseId(report: { id: string; country: string; province?: string; location?: string; case_id?: string }): string {
   if (report.case_id) return report.case_id;
 
@@ -315,7 +323,7 @@ class BackendService {
     // 3. Construct direct view URL from photo_file_id
     const fileId = data.photo_file_id || data.photoFileId || data.fileId || data.file_id;
     if (fileId && typeof fileId === 'string' && fileId.trim().length > 0) {
-      return `https://syd.cloud.appwrite.io/v1/storage/buckets/6a4cc11b00140e0bddad/files/${fileId.trim()}/view?project=6a44fd1100236aa6e14a`;
+      return `https://syd.cloud.appwrite.io/v1/storage/buckets/${APPWRITE_PHOTOS_BUCKET_ID}/files/${fileId.trim()}/view?project=6a44fd1100236aa6e14a`;
     }
 
     return null;
@@ -553,94 +561,162 @@ class BackendService {
     }
   }
 
-  public async deleteCase(caseId: string, country: string): Promise<boolean> {
+  public async deleteCases(cases: CaseReport[]): Promise<DeleteCasesResult> {
     if (this.config.mode === 'mock') {
-      const cases = this.getMockCases();
-      const updated = cases.filter(c => c.id !== caseId);
-      if (updated.length !== cases.length) {
-        this.saveMockCases(updated);
-        return true;
-      }
-      return false;
+      return {
+        succeeded: 0,
+        failedCases: cases,
+        errors: ['Mock Mode has no live reports to delete. Switch to Live Mode.']
+      };
     }
 
-    switch (country) {
+    let succeeded = 0;
+    const failedCases: CaseReport[] = [];
+    const errors: string[] = [];
+
+    for (const report of cases) {
+      let reportDeleted = false;
+      try {
+        await this.deleteReportRecord(report);
+        reportDeleted = true;
+
+        const photoFileId = this.getAppwritePhotoFileId(report);
+        if (photoFileId) {
+          await this.deleteAppwritePhoto(photoFileId);
+        }
+        succeeded++;
+      } catch (error) {
+        failedCases.push(report);
+        const action = reportDeleted
+          ? 'report deleted, but linked photo deletion failed'
+          : 'report deletion failed';
+        errors.push(`${report.name} (${report.id}): ${action}: ${this.describeError(error)}`);
+      }
+    }
+
+    return { succeeded, failedCases, errors };
+  }
+
+  private async deleteReportRecord(report: CaseReport): Promise<void> {
+    switch (report.country) {
       case 'South Africa':
-        return this.deleteFirestoreCase(caseId);
+        await this.deleteFirestoreCase(report.id);
+        return;
       case 'Botswana':
       case 'Namibia':
-        return this.deleteSupabaseCase(caseId);
+        await this.deleteSupabaseCase(report.id);
+        return;
       case 'Lesotho':
       case 'Eswatini':
-        return this.deleteAppwriteCase(caseId);
-      default: {
-        const fsSuccess = await this.deleteFirestoreCase(caseId);
-        if (fsSuccess) return true;
-        const sbSuccess = await this.deleteSupabaseCase(caseId);
-        if (sbSuccess) return true;
-        return this.deleteAppwriteCase(caseId);
-      }
+        await this.deleteAppwriteCase(report.id);
+        return;
+      default:
+        throw new Error(`Unsupported country for deletion: ${report.country}`);
     }
   }
 
-  public async deleteCases(casesToDelete: { id: string; country: string }[]): Promise<{ succeeded: number; failed: number }> {
-    let succeeded = 0;
-    let failed = 0;
-    for (const item of casesToDelete) {
-      const ok = await this.deleteCase(item.id, item.country);
-      if (ok) {
-        succeeded++;
-      } else {
-        failed++;
-      }
-    }
-    return { succeeded, failed };
-  }
+  private getAppwritePhotoFileId(report: CaseReport): string | null {
+    const provider = report.storage_provider?.toLowerCase();
+    if (provider && provider !== 'appwrite') return null;
 
-  private async deleteFirestoreCase(caseId: string): Promise<boolean> {
-    if (!this.firestore) return false;
-    try {
-      const docRef = doc(this.firestore, this.config.firebase.collectionName, caseId);
-      await deleteDoc(docRef);
-      return true;
-    } catch (e) {
-      console.error('Error deleting Firestore document:', e);
-      return false;
+    if (report.photo_file_id?.trim()) {
+      return report.photo_file_id.trim();
     }
-  }
 
-  private async deleteSupabaseCase(caseId: string): Promise<boolean> {
-    if (!this.supabase) return false;
-    try {
-      const { error } = await this.supabase
-        .from(this.config.supabase.tableName)
-        .delete()
-        .eq('id', caseId);
-      if (error) throw error;
-      return true;
-    } catch (e) {
-      console.error('Error deleting Supabase row:', e);
-      return false;
-    }
-  }
-
-  private async deleteAppwriteCase(caseId: string): Promise<boolean> {
-    const url = `${this.config.appwrite.endpoint}/databases/${this.config.appwrite.databaseId}/collections/${this.config.appwrite.collectionId}/documents/${caseId}`;
-    try {
-      const response = await fetch(url, {
-        method: 'DELETE',
-        headers: {
-          'X-Appwrite-Project': this.config.appwrite.projectId,
+    for (const photoUrl of [report.photo_original_url, report.photo_url]) {
+      if (!photoUrl) continue;
+      try {
+        const url = new URL(photoUrl);
+        const endpoint = new URL(this.config.appwrite.endpoint);
+        if (url.origin !== endpoint.origin) continue;
+        const pathParts = url.pathname.split('/');
+        const bucketIndex = pathParts.indexOf('buckets');
+        if (
+          bucketIndex >= 0 &&
+          pathParts[bucketIndex + 1] === APPWRITE_PHOTOS_BUCKET_ID &&
+          pathParts[bucketIndex + 2] === 'files' &&
+          pathParts[bucketIndex + 3]
+        ) {
+          return pathParts[bucketIndex + 3];
         }
-      });
-
-      if (!response.ok && response.status !== 204) {
-        throw new Error(`Appwrite delete failed: ${response.statusText}`);
+      } catch (error) {
+        console.warn('Could not read linked photo URL while deleting report:', error);
       }
-      return true;
-    } catch (e) {
-      console.error('Error deleting Appwrite document:', e);
-      return false;
+    }
+    return null;
+  }
+
+  private async deleteFirestoreCase(caseId: string): Promise<void> {
+    if (!this.firestore) throw new Error('Firestore client is not available.');
+    const docRef = doc(this.firestore, this.config.firebase.collectionName, caseId);
+    await deleteDoc(docRef);
+  }
+
+  private async deleteSupabaseCase(caseId: string): Promise<void> {
+    if (!this.supabase) throw new Error('Supabase client is not available.');
+    const { data, error } = await this.supabase
+      .from(this.config.supabase.tableName)
+      .delete()
+      .eq('id', caseId)
+      .select('id');
+    if (error) throw error;
+    if (data?.length) return;
+
+    const { data: existing, error: lookupError } = await this.supabase
+      .from(this.config.supabase.tableName)
+      .select('id')
+      .eq('id', caseId)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+    if (existing) {
+      throw new Error('Supabase did not delete this report. Check the table Row Level Security DELETE policy.');
+    }
+  }
+
+  private async deleteAppwriteCase(caseId: string): Promise<void> {
+    const url = `${this.config.appwrite.endpoint}/databases/${this.config.appwrite.databaseId}/collections/${this.config.appwrite.collectionId}/documents/${encodeURIComponent(caseId)}`;
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'X-Appwrite-Project': this.config.appwrite.projectId,
+      }
+    });
+    if (!response.ok && response.status !== 204 && response.status !== 404) {
+      const message = await this.readAppwriteError(response);
+      throw new Error(
+        response.status === 401 || response.status === 403
+          ? `Appwrite report deletion is not authorized: ${message}`
+          : `Appwrite report deletion failed (${response.status}): ${message}`
+      );
+    }
+  }
+
+  private async deleteAppwritePhoto(fileId: string): Promise<void> {
+    const url = `${this.config.appwrite.endpoint}/storage/buckets/${APPWRITE_PHOTOS_BUCKET_ID}/files/${encodeURIComponent(fileId)}`;
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'X-Appwrite-Project': this.config.appwrite.projectId,
+      }
+    });
+    if (!response.ok && response.status !== 204 && response.status !== 404) {
+      const message = await this.readAppwriteError(response);
+      throw new Error(
+        response.status === 401 || response.status === 403
+          ? `Appwrite photo deletion is not authorized: ${message}`
+          : `Appwrite photo deletion failed (${response.status}): ${message}`
+      );
+    }
+  }
+
+  private async readAppwriteError(response: Response): Promise<string> {
+    const body = await response.text();
+    if (!body) return response.statusText;
+    try {
+      const error = JSON.parse(body);
+      return error.message || body;
+    } catch {
+      return body;
     }
   }
 

@@ -46,13 +46,13 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           <div className="delete-warning-banner">
             <AlertTriangle size={24} className="icon-warning" />
             <p>
-              <strong>Warning:</strong> This will permanently remove {isMultiple ? 'these cases' : 'this case'} from the database. This action cannot be reversed.
+              <strong>Warning:</strong> This will permanently remove {isMultiple ? 'these cases' : 'this case'} and any linked uploaded photo. This action cannot be reversed.
             </p>
           </div>
 
           {errorMsg && (
             <div className="alert alert-danger mt-4">
-              <span>{errorMsg}</span>
+              <span style={{ whiteSpace: 'pre-line' }}>{errorMsg}</span>
             </div>
           )}
 

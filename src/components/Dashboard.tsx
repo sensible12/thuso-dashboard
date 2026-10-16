@@ -163,15 +163,15 @@ export const Dashboard: React.FC = () => {
   const handleExecuteDelete = async () => {
     if (!casesToDelete || casesToDelete.length === 0) return;
 
-    const { succeeded, failed } = await backendService.deleteCases(
-      casesToDelete.map(c => ({ id: c.id, country: c.country }))
-    );
+    const { succeeded, failedCases, errors } = await backendService.deleteCases(casesToDelete);
 
     if (succeeded > 0) {
-      notifySuccess(`Successfully deleted ${succeeded} missing person report(s) from database.`);
+      notifySuccess(`Permanently deleted ${succeeded} report(s) and their linked photos.`);
     }
-    if (failed > 0) {
-      setError(`Failed to delete ${failed} report(s). Check database permissions.`);
+    if (failedCases.length > 0) {
+      setCasesToDelete(failedCases);
+      await fetchReports();
+      throw new Error(errors.join('\n'));
     }
 
     setCasesToDelete(null);
