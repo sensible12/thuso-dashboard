@@ -168,6 +168,7 @@ class BackendService {
   private firebaseApp: FirebaseApp | null = null;
   private firestore: Firestore | null = null;
   private supabase: SupabaseClient | null = null;
+  private supabaseDataClient: SupabaseClient | null = null;
   public lastFetchErrors: string[] = [];
 
   constructor() {
@@ -253,6 +254,23 @@ class BackendService {
       console.error('Failed to initialize Supabase SDK:', e);
       this.supabase = null;
     }
+
+    try {
+      this.supabaseDataClient = createClient(
+        this.config.supabase.url,
+        this.config.supabase.anonKey,
+        {
+          auth: {
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+            persistSession: false
+          }
+        }
+      );
+    } catch (e) {
+      console.error('Failed to initialize public Supabase data client:', e);
+      this.supabaseDataClient = null;
+    }
   }
 
   private getMockCases(): CaseReport[] {
@@ -291,13 +309,13 @@ class BackendService {
     }
 
     // 2. Fetch from Supabase (Botswana & Namibia)
-    if (!this.supabase) {
-      this.lastFetchErrors.push('Supabase: client is not available; check connection settings.');
+    if (!this.supabaseDataClient) {
+      this.lastFetchErrors.push('Supabase: public data client is not available; check connection settings.');
     } else {
       try {
         const pageSize = 1000;
         for (let offset = 0; ; offset += pageSize) {
-          const { data, error } = await this.supabase
+          const { data, error } = await this.supabaseDataClient
             .from(this.config.supabase.tableName)
             .select('*')
             .range(offset, offset + pageSize - 1);
