@@ -519,6 +519,7 @@ button {
   font-size: 0.8rem;
   color: var(--text-secondary);
   margin-top: 0.2rem;
+  white-space: pre-line;
 }
 
 /* Cases Table Wrapper */
@@ -3218,5 +3219,4 @@ button {
     display: none; /* Hide phone mockup on mobile portrait to keep form super clean */
   }
 }
-
 

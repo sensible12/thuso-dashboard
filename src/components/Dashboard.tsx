@@ -62,6 +62,11 @@ export const Dashboard: React.FC = () => {
     try {
       const data = await backendService.fetchCases();
       setReports(data);
+      setError(
+        backendService.lastFetchErrors.length > 0
+          ? `Partial results: ${backendService.lastFetchErrors.join('\n')}`
+          : null
+      );
       // Clear selection if cases change
       setSelectedIds(new Set());
     } catch (e: any) {
@@ -230,7 +235,7 @@ export const Dashboard: React.FC = () => {
                 <CloudCheck className="icon-green anim-pulse" />
                 <div>
                   <span className="status-title">Live Mode</span>
-                  <span className="status-details">Connected to 3 databases</span>
+                  <span className="status-details">Firestore, Supabase & Appwrite configured</span>
                 </div>
               </>
             ) : (

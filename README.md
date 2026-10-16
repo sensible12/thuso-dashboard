@@ -46,6 +46,10 @@ npm install
 npm run dev
 ```
 
+## 🌐 GitHub Pages Backend Access
+
+The dashboard reads case records directly from Firestore, Supabase, and Appwrite. For Appwrite, add the deployed GitHub Pages hostname (for example, `sensible12.github.io`) as a **Web platform** in the Appwrite project settings; use the hostname shown in the dashboard warning if your deployment uses a different domain. The dashboard reports partial database failures above the cases list instead of silently implying that every source is connected.
+
 ---
 
 ## 📄 License

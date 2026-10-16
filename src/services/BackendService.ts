@@ -277,6 +277,7 @@ class BackendService {
   private firebaseApp: FirebaseApp | null = null;
   private firestore: Firestore | null = null;
   private supabase: SupabaseClient | null = null;
+  public lastFetchErrors: string[] = [];
 
   constructor() {
     this.config = this.loadConfig();
@@ -351,6 +352,7 @@ class BackendService {
   // --- Main API Methods ---
 
   public async fetchCases(): Promise<CaseReport[]> {
+    this.lastFetchErrors = [];
     if (this.config.mode === 'mock') {
       return this.getMockCases();
     }
@@ -358,7 +360,9 @@ class BackendService {
     const allCases: CaseReport[] = [];
 
     // 1. Fetch from Firestore (South Africa)
-    if (this.firestore) {
+    if (!this.firestore) {
+      this.lastFetchErrors.push('Firestore: client is not available; check Firebase settings.');
+    } else {
       try {
         const querySnapshot = await getDocs(collection(this.firestore, this.config.firebase.collectionName));
         querySnapshot.forEach((docSnap) => {
@@ -367,23 +371,32 @@ class BackendService {
         });
       } catch (e) {
         console.error('Error fetching Firestore cases:', e);
+        this.lastFetchErrors.push(`Firestore: ${this.describeError(e)}`);
       }
     }
 
     // 2. Fetch from Supabase (Botswana & Namibia)
-    if (this.supabase) {
+    if (!this.supabase) {
+      this.lastFetchErrors.push('Supabase: client is not available; check connection settings.');
+    } else {
       try {
-        const { data, error } = await this.supabase
-          .from(this.config.supabase.tableName)
-          .select('*');
-        if (error) throw error;
-        if (data) {
-          data.forEach((row) => {
-            allCases.push(this.mapRawCase(row.id, row));
-          });
+        const pageSize = 1000;
+        for (let offset = 0; ; offset += pageSize) {
+          const { data, error } = await this.supabase
+            .from(this.config.supabase.tableName)
+            .select('*')
+            .range(offset, offset + pageSize - 1);
+          if (error) throw error;
+          if (data) {
+            data.forEach((row) => {
+              allCases.push(this.mapRawCase(row.id, row));
+            });
+          }
+          if (!data || data.length < pageSize) break;
         }
       } catch (e) {
         console.error('Error fetching Supabase cases:', e);
+        this.lastFetchErrors.push(`Supabase: ${this.describeError(e)}`);
       }
     }
 
@@ -393,6 +406,10 @@ class BackendService {
       allCases.push(...appwriteCases);
     } catch (e) {
       console.error('Error fetching Appwrite cases:', e);
+      const originHelp = this.isAppwriteOriginBlocked
+        ? ` Add ${window.location.origin} as a Web platform in the Appwrite project settings.`
+        : '';
+      this.lastFetchErrors.push(`Appwrite: ${this.describeError(e)}.${originHelp}`);
     }
 
     // Sort cases by creation date descending
@@ -456,22 +473,56 @@ class BackendService {
     };
   }
 
+  public isAppwriteOriginBlocked = false;
+
   private async fetchAppwriteCases(): Promise<CaseReport[]> {
-    const url = `${this.config.appwrite.endpoint}/databases/${this.config.appwrite.databaseId}/collections/${this.config.appwrite.collectionId}/documents`;
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'X-Appwrite-Project': this.config.appwrite.projectId,
+    const pageSize = 100;
+    const cases: CaseReport[] = [];
+    for (let offset = 0; ; offset += pageSize) {
+      const url = new URL(
+        `${this.config.appwrite.endpoint}/databases/${this.config.appwrite.databaseId}/collections/${this.config.appwrite.collectionId}/documents`
+      );
+      url.searchParams.set('limit', String(pageSize));
+      url.searchParams.set('offset', String(offset));
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'X-Appwrite-Project': this.config.appwrite.projectId,
+        }
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => null);
+        if (
+          errJson?.type === 'general_unknown_origin' ||
+          (typeof errJson?.message === 'string' && /origin/i.test(errJson.message))
+        ) {
+          this.isAppwriteOriginBlocked = true;
+          console.warn(`[Appwrite] Origin "${window.location.hostname}" is not registered in Appwrite Console.`);
+        }
+        throw new Error(`Appwrite request failed: ${response.statusText} (${errJson?.message || response.status})`);
       }
-    });
 
-    if (!response.ok) {
-      throw new Error(`Appwrite request failed: ${response.statusText}`);
+      this.isAppwriteOriginBlocked = false;
+      const result = await response.json();
+      const documents = result.documents || [];
+      cases.push(...documents.map((doc: any) => this.mapRawCase(doc.$id, doc)));
+      if (documents.length < pageSize) break;
     }
+    return cases;
+  }
 
-    const result = await response.json();
-    const documents = result.documents || [];
-    return documents.map((doc: any) => this.mapRawCase(doc.$id, doc));
+  private describeError(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'message' in error &&
+      typeof error.message === 'string'
+    ) {
+      return error.message;
+    }
+    return String(error);
   }
 
   public async updateCaseVerification(
