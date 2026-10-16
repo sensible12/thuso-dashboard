@@ -661,7 +661,7 @@ class BackendService {
         throw new Error('Supabase live client is not available. Please check connection settings.');
       }
 
-      const response = await this.supabase.functions.invoke('send-global-missing-person-alert', {
+      const response = await this.supabase.functions.invoke('admin-send-announcement', {
         body: {
           topic: topic,
           reportId: payload.reportId || undefined,
@@ -685,10 +685,20 @@ class BackendService {
       });
 
       if (response.error) {
+        const context = (response.error as { context?: Response }).context;
+        if (context instanceof Response) {
+          const errorData = await context.clone().json().catch(() => null);
+          if (typeof errorData?.error === 'string') {
+            throw new Error(errorData.error);
+          }
+        }
         throw response.error;
       }
 
       const resData = response.data;
+      if (resData?.success !== true) {
+        throw new Error(resData?.error || 'Failed to dispatch push announcement.');
+      }
       const historyItem: AnnouncementHistoryItem = {
         id: 'ann_' + Date.now(),
         title: payload.title,
@@ -703,7 +713,7 @@ class BackendService {
 
       return {
         success: true,
-        messageId: resData?.result?.name || historyItem.id
+        messageId: resData?.messageId || historyItem.id
       };
     } catch (e: any) {
       console.error('Error broadcasting announcement:', e);

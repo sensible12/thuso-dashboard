@@ -52,14 +52,17 @@ The dashboard reads case records directly from Firestore, Supabase, and Appwrite
 
 ## 🔐 Moderator Sign-In and Secure Deletion
 
-The dashboard requires a Supabase Auth session. Report deletion is performed only by the `admin-delete-report` Supabase Edge Function, which checks the signed-in email against the private `DASHBOARD_MODERATOR_EMAIL` secret before deleting a report and its linked Appwrite photo. Do not add public DELETE policies to Firestore, Supabase, or Appwrite.
+The dashboard requires a Supabase Auth session. Report deletion and push announcements are handled by the `admin-delete-report` and `admin-send-announcement` Supabase Edge Functions. Both check the signed-in email against the private `DASHBOARD_MODERATOR_EMAIL` secret. Do not add public DELETE policies to Firestore, Supabase, or Appwrite.
 
-The function uses the existing Supabase Edge Function secrets `DASHBOARD_MODERATOR_EMAIL`, `APPWRITE_API_KEY`, `APPWRITE_ENDPOINT`, `APPWRITE_PROJECT_ID`, `APPWRITE_DATABASE_ID`, `APPWRITE_REPORTS_COLLECTION_ID`, `APPWRITE_PHOTOS_BUCKET_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`. Confirm these are all present, that the moderator email matches the confirmed Auth user, and that the Appwrite API key is scoped to `documents.write` and `files.write`. The Firebase service account must have Firestore write permission. Supabase supplies `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` to hosted Edge Functions.
+The deletion function uses the existing Supabase Edge Function secrets `DASHBOARD_MODERATOR_EMAIL`, `APPWRITE_API_KEY`, `APPWRITE_ENDPOINT`, `APPWRITE_PROJECT_ID`, `APPWRITE_DATABASE_ID`, `APPWRITE_REPORTS_COLLECTION_ID`, `APPWRITE_PHOTOS_BUCKET_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`. Confirm these are present, that the moderator email matches the confirmed Auth user, and that the Appwrite API key is scoped to `documents.write` and `files.write`. The Firebase service account must have Firestore write permission.
 
-From this dashboard repository, deploy the updated protected function:
+The announcement function uses `DASHBOARD_MODERATOR_EMAIL`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`. Optionally set `GLOBAL_FCM_TOPIC` to override the default topic `global-missing-person-alerts`. The Firebase service account must be allowed to send Firebase Cloud Messaging messages. Supabase supplies `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` to hosted Edge Functions.
+
+From this dashboard repository, deploy the protected functions:
 
    ```bash
    npx supabase functions deploy admin-delete-report --project-ref gfblezjsmpbyucjwxmju
+   npx supabase functions deploy admin-send-announcement --project-ref gfblezjsmpbyucjwxmju
    ```
 
 Never put the Appwrite API key, Firebase private key, or Supabase service-role key in dashboard source, GitHub Pages, or a committed file. The GitHub Pages workflow deploys the static dashboard; the Edge Function is deployed separately.
