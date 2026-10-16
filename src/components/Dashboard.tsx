@@ -676,7 +676,11 @@ export const Dashboard: React.FC = () => {
                 ) : (
                   <div className="empty-state glass">
                     <Users size={48} />
-                    <p>No reports match selected filters or search parameters.</p>
+                    <p>
+                      {reports.length === 0 && configMode === 'mock'
+                        ? 'Mock Mode is empty. Switch to Live Mode to load database cases.'
+                        : 'No reports match selected filters or search parameters.'}
+                    </p>
                   </div>
                 )}
               </section>
@@ -804,7 +808,11 @@ export const Dashboard: React.FC = () => {
                       <tr>
                         <td colSpan={9} className="empty-state">
                           <Users size={48} />
-                          <p>No reports match selected filters or search parameters.</p>
+                          <p>
+                            {reports.length === 0 && configMode === 'mock'
+                              ? 'Mock Mode is empty. Switch to Live Mode to load database cases.'
+                              : 'No reports match selected filters or search parameters.'}
+                          </p>
                         </td>
                       </tr>
                     )}

@@ -52,7 +52,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, onConfigC
                   onChange={() => setConfig(prev => ({ ...prev, mode: 'mock' }))} 
                 />
                 <span className="mode-title">Mock Mode (Offline)</span>
-                <span className="mode-desc">Use built-in high-fidelity database mock simulation</span>
+                <span className="mode-desc">Offline mode with no sample cases; use Live Mode to load database records</span>
               </label>
 
               <label className={`mode-label ${config.mode === 'live' ? 'active' : ''}`}>

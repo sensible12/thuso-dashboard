@@ -8,7 +8,7 @@
 
 ## 🌟 Overview
 
-The **Thuso Command Center Dashboard** is a real-time web portal designed for rapid crisis response, case verification, and community alerting. Built with React 19, TypeScript, and Vite, it bridges field telemetry from the Thuso mobile application with emergency response personnel.
+The **Thuso Command Center Dashboard** is a real-time web portal designed for rapid crisis response, case verification, and community alerting. Built with React 19, TypeScript, and Vite, it bridges field telemetry from the Thuso mobile application with emergency response personnel. The dashboard does not include demo cases; Mock Mode is empty, and displayed reports are fetched from the configured backends.
 
 ### Key Capabilities
 

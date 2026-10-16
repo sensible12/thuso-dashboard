@@ -152,125 +152,8 @@ const DEFAULT_CONFIG: ConnectionConfig = {
   }
 };
 
-const MOCK_CASES_KEY = 'thuso_mock_cases';
 const CONFIG_STORAGE_KEY = 'thuso_config';
-
-const INITIAL_MOCK_CASES: CaseReport[] = [
-  {
-    id: 'case_001',
-    name: 'Neo Mokoena',
-    age: 14,
-    sex: 'Male',
-    country: 'South Africa',
-    location: 'Soweto, Gauteng',
-    details: 'Neo was last seen heading to school at 7:30 AM wearing a black backpack and a blue school uniform. Height approx 1.6m, thin build.',
-    contact_name: 'Sarah Mokoena',
-    contact_phone: '+27 72 345 6789',
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 hours ago
-    submitted: true,
-    status: 'missing',
-    verification_status: 'Pending verification',
-    photo_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400',
-    photo_original_url: null,
-    photo_file_id: null,
-    storage_provider: 'mock'
-  },
-  {
-    id: 'case_002',
-    name: 'Kabelo Ntsana',
-    age: 9,
-    sex: 'Male',
-    country: 'Lesotho',
-    location: 'Maseru Central, Maseru',
-    details: 'Kabelo was playing in the local community park before he went missing around 4:00 PM. He is wearing a red t-shirt, grey shorts, and sandals.',
-    contact_name: 'Lerato Ntsana',
-    contact_phone: '+266 58 123 456',
-    created_at: new Date(Date.now() - 3600000 * 24).toISOString(), // 1 day ago
-    submitted: true,
-    status: 'missing',
-    verification_status: 'Verified',
-    photo_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=400',
-    photo_original_url: null,
-    photo_file_id: null,
-    storage_provider: 'mock'
-  },
-  {
-    id: 'case_003',
-    name: 'Amara Dlamini',
-    age: 17,
-    sex: 'Female',
-    country: 'Eswatini',
-    location: 'Mbabane, Hhohho',
-    details: 'Amara left home on Saturday evening to visit a friend but never arrived. She was wearing a yellow dress and white sneakers.',
-    contact_name: 'Thabo Dlamini',
-    contact_phone: '+268 76 987 654',
-    created_at: new Date(Date.now() - 3600000 * 48).toISOString(), // 2 days ago
-    submitted: true,
-    status: 'found',
-    verification_status: 'Verified',
-    photo_url: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&q=80&w=400',
-    photo_original_url: null,
-    photo_file_id: null,
-    storage_provider: 'mock'
-  },
-  {
-    id: 'case_004',
-    name: 'Thabo Khumalo',
-    age: 23,
-    sex: 'Male',
-    country: 'South Africa',
-    location: 'Durban, KwaZulu-Natal',
-    details: 'Thabo was last seen at a shopping center. He has a scar on his right cheek. Wearing blue jeans and a black hoodie.',
-    contact_name: 'Zanele Khumalo',
-    contact_phone: '+27 82 555 1234',
-    created_at: new Date(Date.now() - 3600000 * 72).toISOString(), // 3 days ago
-    submitted: true,
-    status: 'missing',
-    verification_status: 'Verified',
-    photo_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=400',
-    photo_original_url: null,
-    photo_file_id: null,
-    storage_provider: 'mock'
-  },
-  {
-    id: 'case_005',
-    name: 'Palesa Moloi',
-    age: 31,
-    sex: 'Female',
-    country: 'Botswana',
-    location: 'Gaborone, South-East',
-    details: 'Palesa left for a jog on Monday morning at 6 AM and has not returned. She is about 1.7m tall with black hair in braids.',
-    contact_name: 'Mpho Moloi',
-    contact_phone: '+267 71 234 567',
-    created_at: new Date(Date.now() - 3600000 * 96).toISOString(), // 4 days ago
-    submitted: true,
-    status: 'missing',
-    verification_status: 'Rejected',
-    photo_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400',
-    photo_original_url: null,
-    photo_file_id: null,
-    storage_provider: 'mock'
-  },
-  {
-    id: 'case_006',
-    name: 'Johanna Swartbooi',
-    age: 5,
-    sex: 'Female',
-    country: 'Namibia',
-    location: 'Windhoek, Khomas',
-    details: 'Johanna was last seen in the backyard of her house around noon. She is wearing a pink dress and has short black hair.',
-    contact_name: 'Helena Swartbooi',
-    contact_phone: '+264 81 987 6543',
-    created_at: new Date(Date.now() - 3600000 * 120).toISOString(), // 5 days ago
-    submitted: true,
-    status: 'found',
-    verification_status: 'Verified',
-    photo_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=400',
-    photo_original_url: null,
-    photo_file_id: null,
-    storage_provider: 'mock'
-  }
-];
+const MOCK_CASES_KEY = 'thuso_mock_cases';
 
 class BackendService {
   private config: ConnectionConfig;
@@ -331,18 +214,9 @@ class BackendService {
     }
   }
 
-  // --- Mock Mode Helpers ---
   private getMockCases(): CaseReport[] {
-    const stored = localStorage.getItem(MOCK_CASES_KEY);
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch (e) {
-        console.error('Failed to parse mock cases, resetting', e);
-      }
-    }
-    localStorage.setItem(MOCK_CASES_KEY, JSON.stringify(INITIAL_MOCK_CASES));
-    return INITIAL_MOCK_CASES;
+    localStorage.removeItem(MOCK_CASES_KEY);
+    return [];
   }
 
   private saveMockCases(cases: CaseReport[]) {
