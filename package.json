@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@rolldown/binding-win32-x64-msvc": "^1.1.5",
     "@supabase/supabase-js": "^2.110.7",
     "firebase": "^12.16.0",
     "lucide-react": "^1.25.0",
