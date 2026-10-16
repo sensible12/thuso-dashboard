@@ -1,7 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import type { Session } from '@supabase/supabase-js';
 import { initializeApp } from 'firebase/app';
 import type { FirebaseApp } from 'firebase/app';
-import { getFirestore, collection, doc, getDocs, updateDoc, deleteDoc, Firestore } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDocs, updateDoc, Firestore } from 'firebase/firestore';
 
 export interface CaseReport {
   id: string;
@@ -51,8 +52,6 @@ export interface DeleteCasesResult {
   failedCases: CaseReport[];
   errors: string[];
 }
-
-const APPWRITE_PHOTOS_BUCKET_ID = '6a4cc11b00140e0bddad';
 
 export function getCaseId(report: { id: string; country: string; province?: string; location?: string; case_id?: string }): string {
   if (report.case_id) return report.case_id;
@@ -161,6 +160,7 @@ const DEFAULT_CONFIG: ConnectionConfig = {
 };
 
 const CONFIG_STORAGE_KEY = 'thuso_config';
+const APPWRITE_PHOTOS_BUCKET_ID = '6a4cc11b00140e0bddad';
 const MOCK_CASES_KEY = 'thuso_mock_cases';
 
 class BackendService {
@@ -191,6 +191,41 @@ class BackendService {
     return this.config;
   }
 
+  public async getAuthSession(): Promise<Session | null> {
+    if (!this.supabase) throw new Error('Supabase client is not available.');
+    const { data, error } = await this.supabase.auth.getSession();
+    if (error) throw error;
+    return data.session;
+  }
+
+  public onAuthStateChange(callback: (session: Session | null) => void) {
+    if (!this.supabase) throw new Error('Supabase client is not available.');
+    return this.supabase.auth.onAuthStateChange((_event, session) => callback(session));
+  }
+
+  public async signIn(email: string, password: string): Promise<void> {
+    if (!this.supabase) throw new Error('Supabase client is not available.');
+    const { error } = await this.supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  }
+
+  public async signOut(): Promise<void> {
+    if (!this.supabase) throw new Error('Supabase client is not available.');
+    const { error } = await this.supabase.auth.signOut();
+    if (error) throw error;
+  }
+
+  public async verifyModeratorSession(): Promise<void> {
+    if (!this.supabase) throw new Error('Supabase client is not available.');
+    const { data, error } = await this.supabase.functions.invoke('admin-delete-report', {
+      body: { action: 'authorize' }
+    });
+    if (error) throw error;
+    if (data?.authorized !== true) {
+      throw new Error(data?.error || 'This account is not authorized to access the dashboard.');
+    }
+  }
+
   public saveConfig(newConfig: ConnectionConfig) {
     this.config = newConfig;
     localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
@@ -201,17 +236,15 @@ class BackendService {
     if (this.config.mode === 'mock') {
       this.firebaseApp = null;
       this.firestore = null;
-      this.supabase = null;
-      return;
-    }
-
-    try {
-      this.firebaseApp = initializeApp(this.config.firebase);
-      this.firestore = getFirestore(this.firebaseApp);
-    } catch (e) {
-      console.error('Failed to initialize Firebase SDK:', e);
-      this.firebaseApp = null;
-      this.firestore = null;
+    } else {
+      try {
+        this.firebaseApp = initializeApp(this.config.firebase);
+        this.firestore = getFirestore(this.firebaseApp);
+      } catch (e) {
+        console.error('Failed to initialize Firebase SDK:', e);
+        this.firebaseApp = null;
+        this.firestore = null;
+      }
     }
 
     try {
@@ -562,11 +595,11 @@ class BackendService {
   }
 
   public async deleteCases(cases: CaseReport[]): Promise<DeleteCasesResult> {
-    if (this.config.mode === 'mock') {
+    if (this.config.mode !== 'live' || !this.supabase) {
       return {
         succeeded: 0,
         failedCases: cases,
-        errors: ['Mock Mode has no live reports to delete. Switch to Live Mode.']
+        errors: ['Live mode and an authenticated moderator session are required to delete reports.']
       };
     }
 
@@ -575,149 +608,32 @@ class BackendService {
     const errors: string[] = [];
 
     for (const report of cases) {
-      let reportDeleted = false;
       try {
-        await this.deleteReportRecord(report);
-        reportDeleted = true;
-
-        const photoFileId = this.getAppwritePhotoFileId(report);
-        if (photoFileId) {
-          await this.deleteAppwritePhoto(photoFileId);
+        const { data, error } = await this.supabase.functions.invoke('admin-delete-report', {
+          body: {
+            action: 'delete',
+            report: {
+              id: report.id,
+              country: report.country,
+              photo_file_id: report.photo_file_id,
+              photo_url: report.photo_url,
+              photo_original_url: report.photo_original_url,
+              storage_provider: report.storage_provider
+            }
+          }
+        });
+        if (error) throw error;
+        if (data?.success !== true) {
+          throw new Error(data?.error || 'The secure delete service did not confirm deletion.');
         }
         succeeded++;
       } catch (error) {
         failedCases.push(report);
-        const action = reportDeleted
-          ? 'report deleted, but linked photo deletion failed'
-          : 'report deletion failed';
-        errors.push(`${report.name} (${report.id}): ${action}: ${this.describeError(error)}`);
+        errors.push(`${report.name} (${report.id}): ${this.describeError(error)}`);
       }
     }
 
     return { succeeded, failedCases, errors };
-  }
-
-  private async deleteReportRecord(report: CaseReport): Promise<void> {
-    switch (report.country) {
-      case 'South Africa':
-        await this.deleteFirestoreCase(report.id);
-        return;
-      case 'Botswana':
-      case 'Namibia':
-        await this.deleteSupabaseCase(report.id);
-        return;
-      case 'Lesotho':
-      case 'Eswatini':
-        await this.deleteAppwriteCase(report.id);
-        return;
-      default:
-        throw new Error(`Unsupported country for deletion: ${report.country}`);
-    }
-  }
-
-  private getAppwritePhotoFileId(report: CaseReport): string | null {
-    const provider = report.storage_provider?.toLowerCase();
-    if (provider && provider !== 'appwrite') return null;
-
-    if (report.photo_file_id?.trim()) {
-      return report.photo_file_id.trim();
-    }
-
-    for (const photoUrl of [report.photo_original_url, report.photo_url]) {
-      if (!photoUrl) continue;
-      try {
-        const url = new URL(photoUrl);
-        const endpoint = new URL(this.config.appwrite.endpoint);
-        if (url.origin !== endpoint.origin) continue;
-        const pathParts = url.pathname.split('/');
-        const bucketIndex = pathParts.indexOf('buckets');
-        if (
-          bucketIndex >= 0 &&
-          pathParts[bucketIndex + 1] === APPWRITE_PHOTOS_BUCKET_ID &&
-          pathParts[bucketIndex + 2] === 'files' &&
-          pathParts[bucketIndex + 3]
-        ) {
-          return pathParts[bucketIndex + 3];
-        }
-      } catch (error) {
-        console.warn('Could not read linked photo URL while deleting report:', error);
-      }
-    }
-    return null;
-  }
-
-  private async deleteFirestoreCase(caseId: string): Promise<void> {
-    if (!this.firestore) throw new Error('Firestore client is not available.');
-    const docRef = doc(this.firestore, this.config.firebase.collectionName, caseId);
-    await deleteDoc(docRef);
-  }
-
-  private async deleteSupabaseCase(caseId: string): Promise<void> {
-    if (!this.supabase) throw new Error('Supabase client is not available.');
-    const { data, error } = await this.supabase
-      .from(this.config.supabase.tableName)
-      .delete()
-      .eq('id', caseId)
-      .select('id');
-    if (error) throw error;
-    if (data?.length) return;
-
-    const { data: existing, error: lookupError } = await this.supabase
-      .from(this.config.supabase.tableName)
-      .select('id')
-      .eq('id', caseId)
-      .maybeSingle();
-    if (lookupError) throw lookupError;
-    if (existing) {
-      throw new Error('Supabase did not delete this report. Check the table Row Level Security DELETE policy.');
-    }
-  }
-
-  private async deleteAppwriteCase(caseId: string): Promise<void> {
-    const url = `${this.config.appwrite.endpoint}/databases/${this.config.appwrite.databaseId}/collections/${this.config.appwrite.collectionId}/documents/${encodeURIComponent(caseId)}`;
-    const response = await fetch(url, {
-      method: 'DELETE',
-      headers: {
-        'X-Appwrite-Project': this.config.appwrite.projectId,
-      }
-    });
-    if (!response.ok && response.status !== 204 && response.status !== 404) {
-      const message = await this.readAppwriteError(response);
-      throw new Error(
-        response.status === 401 || response.status === 403
-          ? `Appwrite report deletion is not authorized: ${message}`
-          : `Appwrite report deletion failed (${response.status}): ${message}`
-      );
-    }
-  }
-
-  private async deleteAppwritePhoto(fileId: string): Promise<void> {
-    const url = `${this.config.appwrite.endpoint}/storage/buckets/${APPWRITE_PHOTOS_BUCKET_ID}/files/${encodeURIComponent(fileId)}`;
-    const response = await fetch(url, {
-      method: 'DELETE',
-      headers: {
-        'X-Appwrite-Project': this.config.appwrite.projectId,
-      }
-    });
-    if (!response.ok && response.status !== 204 && response.status !== 404) {
-      const message = await this.readAppwriteError(response);
-      throw new Error(
-        response.status === 401 || response.status === 403
-          ? `Appwrite photo deletion is not authorized: ${message}`
-          : `Appwrite photo deletion failed (${response.status}): ${message}`
-      );
-    }
-  }
-
-  private async readAppwriteError(response: Response): Promise<string> {
-    const body = await response.text();
-    if (!body) return response.statusText;
-    try {
-      const error = JSON.parse(body);
-      return error.message || body;
-    } catch {
-      return body;
-    }
   }
 
   // --- Push Announcement Broadcasting ---

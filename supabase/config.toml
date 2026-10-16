@@ -1,0 +1,4 @@
+project_id = "gfblezjsmpbyucjwxmju"
+
+[functions.admin-delete-report]
+verify_jwt = true

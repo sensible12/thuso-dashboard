@@ -12,10 +12,14 @@ import {
   Users, ShieldAlert, CheckCircle, HelpCircle, Shield, UserCheck,
   RefreshCw, Settings, Search, Filter, AlertTriangle, CloudCheck, CloudOff, ListFilter,
   Download, Trash2, Map, LayoutList, Menu, X, CheckSquare, Square,
-  MapPin, Check, Megaphone
+  MapPin, Check, Megaphone, LogOut
 } from 'lucide-react';
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+  onSignOut: () => void;
+}
+
+export const Dashboard: React.FC<DashboardProps> = ({ onSignOut }) => {
   const [reports, setReports] = useState<CaseReport[]>([]);
   const [filteredReports, setFilteredReports] = useState<CaseReport[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -348,6 +352,11 @@ export const Dashboard: React.FC = () => {
             <button className="btn-secondary settings-desktop-btn" onClick={() => setIsSettingsOpen(true)}>
               <Settings size={15} />
               <span>Settings</span>
+            </button>
+
+            <button className="btn-secondary" onClick={onSignOut}>
+              <LogOut size={15} />
+              <span>Sign out</span>
             </button>
           </div>
         </header>

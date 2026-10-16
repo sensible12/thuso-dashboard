@@ -50,6 +50,27 @@ npm run dev
 
 The dashboard reads case records directly from Firestore, Supabase, and Appwrite. For Appwrite, add the deployed GitHub Pages hostname (for example, `sensible12.github.io`) as a **Web platform** in the Appwrite project settings; use the hostname shown in the dashboard warning if your deployment uses a different domain. The dashboard reports partial database failures above the cases list instead of silently implying that every source is connected.
 
+## 🔐 Moderator Sign-In and Secure Deletion
+
+The dashboard requires a Supabase Auth session. Report deletion is performed only by the `admin-delete-report` Supabase Edge Function, which checks the signed-in email against the private `DASHBOARD_MODERATOR_EMAIL` secret before deleting a report and its linked Appwrite photo. Do not add public DELETE policies to Firestore, Supabase, or Appwrite.
+
+Before the dashboard can sign in and delete reports:
+
+1. Create or invite the moderator account in the Supabase project's **Authentication → Users** page. Public sign-up is not needed.
+2. In the Supabase project's **Edge Functions → Secrets**, set:
+   - `DASHBOARD_MODERATOR_EMAIL` to the moderator's Supabase Auth email.
+   - `APPWRITE_API_KEY` to an Appwrite project API key with only `documents.write` and `files.write` scopes.
+   - `FIREBASE_SERVICE_ACCOUNT_JSON` to the full Firebase service-account JSON for the Thuso project. Its service account needs Firestore write permission.
+3. Keep Supabase's `SUPABASE_SERVICE_ROLE_KEY` available to Edge Functions (it is supplied by Supabase on hosted projects).
+4. From this dashboard repository, link the Supabase project and deploy the protected function:
+
+   ```bash
+   npx supabase link --project-ref gfblezjsmpbyucjwxmju
+   npx supabase functions deploy admin-delete-report --project-ref gfblezjsmpbyucjwxmju
+   ```
+
+Never put the Appwrite API key, Firebase service-account JSON, or Supabase service-role key in dashboard source, GitHub Pages, or a committed file. The GitHub Pages workflow deploys the static dashboard; the Edge Function is deployed separately.
+
 ---
 
 ## 📄 License

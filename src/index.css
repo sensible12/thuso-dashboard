@@ -522,6 +522,89 @@ button {
   white-space: pre-line;
 }
 
+.moderator-login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.moderator-login-card {
+  width: min(100%, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 2rem;
+  border-radius: 12px;
+}
+
+.moderator-login-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.moderator-login-brand h1 {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+}
+
+.moderator-login-brand p,
+.moderator-login-note {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.moderator-login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.moderator-login-field input {
+  width: 100%;
+  border: 1px solid var(--border-glass-hover);
+  border-radius: 6px;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.moderator-login-submit {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.moderator-login-submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.moderator-login-error {
+  border-left: 3px solid var(--accent-red);
+  padding: 0.65rem 0.8rem;
+  background: rgba(220, 38, 38, 0.08);
+  color: #fca5a5;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.moderator-auth-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+}
+
 /* Cases Table Wrapper */
 .cases-table-wrapper {
   border-radius: 12px;
@@ -3219,4 +3302,3 @@ button {
     display: none; /* Hide phone mockup on mobile portrait to keep form super clean */
   }
 }
-
