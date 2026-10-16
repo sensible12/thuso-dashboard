@@ -9,11 +9,6 @@ type Report = {
   storage_provider?: unknown;
 };
 
-const appwritePhotosBucketId = "6a4cc11b00140e0bddad";
-const appwriteEndpoint = "https://syd.cloud.appwrite.io/v1";
-const appwriteProjectId = "6a44fd1100236aa6e14a";
-const appwriteDatabaseId = "6a4ba8910003f31c09e9";
-const appwriteReportsCollectionId = "missing_reports";
 const firebaseProjectId = "thuso-organization";
 const firestoreReportsCollection = "missing_reports";
 const tokenUrl = "https://oauth2.googleapis.com/token";
@@ -125,12 +120,12 @@ async function deleteSupabaseReport(id: string) {
 }
 
 async function deleteAppwriteReport(id: string) {
-  const url = `${appwriteEndpoint}/databases/${appwriteDatabaseId}/collections/${appwriteReportsCollectionId}/documents/${encodeURIComponent(id)}`;
+  const url = `${getRequiredEnv("APPWRITE_ENDPOINT")}/databases/${getRequiredEnv("APPWRITE_DATABASE_ID")}/collections/${getRequiredEnv("APPWRITE_REPORTS_COLLECTION_ID")}/documents/${encodeURIComponent(id)}`;
   await appwriteDelete(url, "Appwrite report");
 }
 
 async function deleteAppwritePhoto(fileId: string) {
-  const url = `${appwriteEndpoint}/storage/buckets/${appwritePhotosBucketId}/files/${encodeURIComponent(fileId)}`;
+  const url = `${getRequiredEnv("APPWRITE_ENDPOINT")}/storage/buckets/${getRequiredEnv("APPWRITE_PHOTOS_BUCKET_ID")}/files/${encodeURIComponent(fileId)}`;
   await appwriteDelete(url, "Appwrite photo");
 }
 
@@ -139,7 +134,7 @@ async function appwriteDelete(url: string, label: string) {
     method: "DELETE",
     headers: {
       "X-Appwrite-Key": getRequiredEnv("APPWRITE_API_KEY"),
-      "X-Appwrite-Project": appwriteProjectId,
+      "X-Appwrite-Project": getRequiredEnv("APPWRITE_PROJECT_ID"),
     },
   });
   if (response.ok || response.status === 204 || response.status === 404) return;
@@ -147,10 +142,11 @@ async function appwriteDelete(url: string, label: string) {
 }
 
 async function deleteFirestoreReport(id: string) {
-  const serviceAccount = JSON.parse(getRequiredEnv("FIREBASE_SERVICE_ACCOUNT_JSON"));
-  if (serviceAccount.project_id !== firebaseProjectId) {
-    throw new Error("The Firebase service account is for the wrong project.");
-  }
+  const serviceAccount = {
+    project_id: firebaseProjectId,
+    client_email: getRequiredEnv("FIREBASE_CLIENT_EMAIL"),
+    private_key: getRequiredEnv("FIREBASE_PRIVATE_KEY").replaceAll("\\n", "\n"),
+  };
   const accessToken = await getFirebaseAccessToken(serviceAccount);
   const url = `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/(default)/documents/${firestoreReportsCollection}/${encodeURIComponent(id)}`;
   const response = await fetch(url, {
@@ -224,13 +220,13 @@ function getAppwritePhotoFileId(report: Report): string | null {
     if (typeof value !== "string") continue;
     try {
       const url = new URL(value);
-      const expectedOrigin = new URL(appwriteEndpoint).origin;
+      const expectedOrigin = new URL(getRequiredEnv("APPWRITE_ENDPOINT")).origin;
       const parts = url.pathname.split("/");
       const bucketIndex = parts.indexOf("buckets");
       if (
         url.origin === expectedOrigin &&
         bucketIndex >= 0 &&
-        parts[bucketIndex + 1] === appwritePhotosBucketId &&
+        parts[bucketIndex + 1] === getRequiredEnv("APPWRITE_PHOTOS_BUCKET_ID") &&
         parts[bucketIndex + 2] === "files" &&
         isAppwriteId(parts[bucketIndex + 3])
       ) {

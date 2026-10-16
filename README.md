@@ -54,22 +54,15 @@ The dashboard reads case records directly from Firestore, Supabase, and Appwrite
 
 The dashboard requires a Supabase Auth session. Report deletion is performed only by the `admin-delete-report` Supabase Edge Function, which checks the signed-in email against the private `DASHBOARD_MODERATOR_EMAIL` secret before deleting a report and its linked Appwrite photo. Do not add public DELETE policies to Firestore, Supabase, or Appwrite.
 
-Before the dashboard can sign in and delete reports:
+The function uses the existing Supabase Edge Function secrets `DASHBOARD_MODERATOR_EMAIL`, `APPWRITE_API_KEY`, `APPWRITE_ENDPOINT`, `APPWRITE_PROJECT_ID`, `APPWRITE_DATABASE_ID`, `APPWRITE_REPORTS_COLLECTION_ID`, `APPWRITE_PHOTOS_BUCKET_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`. Confirm these are all present, that the moderator email matches the confirmed Auth user, and that the Appwrite API key is scoped to `documents.write` and `files.write`. The Firebase service account must have Firestore write permission. Supabase supplies `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` to hosted Edge Functions.
 
-1. Create or invite the moderator account in the Supabase project's **Authentication → Users** page. Public sign-up is not needed.
-2. In the Supabase project's **Edge Functions → Secrets**, set:
-   - `DASHBOARD_MODERATOR_EMAIL` to the moderator's Supabase Auth email.
-   - `APPWRITE_API_KEY` to an Appwrite project API key with only `documents.write` and `files.write` scopes.
-   - `FIREBASE_SERVICE_ACCOUNT_JSON` to the full Firebase service-account JSON for the Thuso project. Its service account needs Firestore write permission.
-3. Keep Supabase's `SUPABASE_SERVICE_ROLE_KEY` available to Edge Functions (it is supplied by Supabase on hosted projects).
-4. From this dashboard repository, link the Supabase project and deploy the protected function:
+From this dashboard repository, deploy the updated protected function:
 
    ```bash
-   npx supabase link --project-ref gfblezjsmpbyucjwxmju
    npx supabase functions deploy admin-delete-report --project-ref gfblezjsmpbyucjwxmju
    ```
 
-Never put the Appwrite API key, Firebase service-account JSON, or Supabase service-role key in dashboard source, GitHub Pages, or a committed file. The GitHub Pages workflow deploys the static dashboard; the Edge Function is deployed separately.
+Never put the Appwrite API key, Firebase private key, or Supabase service-role key in dashboard source, GitHub Pages, or a committed file. The GitHub Pages workflow deploys the static dashboard; the Edge Function is deployed separately.
 
 ---
 
